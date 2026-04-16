@@ -23,7 +23,22 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body style="display:flex; flex-direction:column; min-height:100vh; margin:0;">
+
+<a href="/">
+  <img src="https://hellenicdev.github.io/logo.webp" alt="Logo" class="site-logo">
+</a>
+
+<style>
+.site-logo {
+  position: fixed;   /* stays visible at all times */
+  top: 10px;
+  left: 10px;
+  width: 60px;       /* adjust size */
+  height: auto;
+  z-index: 9999;     /* stays above everything */
+}
+</style>
   <!-- Authentication Card -->
   <div id="auth-card">
     <div class="card">
@@ -56,4 +71,7 @@
 
   <script src="app.js"></script>
 </body>
+  <footer style="text-align:center; padding:20px; font-size:14px; color:gray;">
+    © 2026 HellenicDev — All projects and content belong to HellenicDev.
+  </footer>
 </html>
