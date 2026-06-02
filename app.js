@@ -1,4 +1,4 @@
-const API_BASE = "http://10.11.12.102:3000/server";
+const API_BASE = "https://budget-tracker-api.onrender.com/server";
 
 document.addEventListener("DOMContentLoaded", () => {
   const authCard = document.getElementById("auth-card");
