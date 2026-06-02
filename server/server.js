@@ -119,11 +119,18 @@ app.post(`${PREFIX}/ai-feedback`, async (req, res) => {
       return res.json({ success: false, error: "AI feedback is not configured" });
     }
 
+    const prompt = `You are a financial advisor. Analyze this expense:
+Category: ${category}
+Amount: $${amount}
+
+Respond with ONE short sentence. Start with "You spent a" then "reasonable" or "unreasonable".
+If unreasonable add " — that purchase was not needed." Keep under 40 words.`;
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
 
     const hfRes = await fetch(
-      "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.3",
+      "https://router.huggingface.co/hf-inference/models/google/gemma-2-2b-it",
       {
         method: "POST",
         headers: {
@@ -132,12 +139,7 @@ app.post(`${PREFIX}/ai-feedback`, async (req, res) => {
         },
         signal: controller.signal,
         body: JSON.stringify({
-          inputs: `<s>[INST] You are a financial advisor. Analyze this expense:
-Category: ${category}
-Amount: $${amount}
-
-Respond with ONE short sentence. Start with "You spent a" then "reasonable" or "unreasonable".
-If unreasonable add " — that purchase was not needed." Keep under 40 words. [/INST]`,
+          inputs: prompt,
           parameters: { max_new_tokens: 80, temperature: 0.2 }
         })
       }
@@ -147,12 +149,12 @@ If unreasonable add " — that purchase was not needed." Keep under 40 words. [/
 
     if (!hfRes.ok) {
       const errText = await hfRes.text().catch(() => "");
-      return res.json({ success: false, error: `AI service error (${hfRes.status})` });
+      return res.json({ success: false, error: `AI service error (${hfRes.status}): ${errText}` });
     }
 
     const hfData = await hfRes.json();
     const text = hfData[0]?.generated_text || "";
-    const clean = text.split("[/INST]").pop().split("</s>")[0].trim();
+    const clean = text.replace(prompt, "").trim();
 
     res.json({ success: true, feedback: clean || "Could not generate feedback." });
   } catch (err) {

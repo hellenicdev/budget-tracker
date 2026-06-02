@@ -26,20 +26,30 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(initTurnstile, 200);
       return;
     }
-    turnstileWidgetId = turnstile.render(tcContainer, {
-      sitekey: TURNSTILE_SITEKEY
-    });
+    try {
+      turnstileWidgetId = turnstile.render(tcContainer, {
+        sitekey: TURNSTILE_SITEKEY
+      });
+    } catch {
+    }
   }
   initTurnstile();
 
   function getTurnstileToken() {
     if (!turnstileWidgetId || typeof turnstile === "undefined") return "";
-    return turnstile.getResponse(turnstileWidgetId);
+    try {
+      return turnstile.getResponse(turnstileWidgetId);
+    } catch {
+      return "";
+    }
   }
 
   function resetTurnstile() {
     if (turnstileWidgetId && typeof turnstile !== "undefined") {
-      turnstile.reset(turnstileWidgetId);
+      try {
+        turnstile.reset(turnstileWidgetId);
+      } catch {
+      }
     }
   }
 
