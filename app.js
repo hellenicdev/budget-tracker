@@ -1,4 +1,4 @@
-const API_BASE = "https://budget-tracker-api.onrender.com/server";
+const API_BASE = "https://budget-tracker-hk4o.onrender.com/server";
 
 document.addEventListener("DOMContentLoaded", () => {
   const authCard = document.getElementById("auth-card");
