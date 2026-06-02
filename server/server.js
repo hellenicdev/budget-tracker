@@ -119,16 +119,14 @@ app.post(`${PREFIX}/ai-feedback`, async (req, res) => {
       return res.json({ success: false, error: "AI feedback is not configured" });
     }
 
-    const prompt = `User: Analyze this expense: ${category} $${amount}.
-Reply with ONE short sentence. Start with "You spent a" then "reasonable" or "unreasonable".
-If unreasonable add " — that purchase was not needed." Keep under 40 words.
-Assistant:`;
+    const prompt = `Expense: ${category} $${amount}
+Feedback: You spent a`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
 
     const hfRes = await fetch(
-      "https://router.huggingface.co/hf-inference/models/tiiuae/falcon-7b-instruct",
+      "https://router.huggingface.co/hf-inference/models/gpt2",
       {
         method: "POST",
         headers: {
@@ -138,7 +136,7 @@ Assistant:`;
         signal: controller.signal,
         body: JSON.stringify({
           inputs: prompt,
-          parameters: { max_new_tokens: 80, temperature: 0.2 }
+          parameters: { max_new_tokens: 40, temperature: 0.3 }
         })
       }
     );
@@ -147,14 +145,18 @@ Assistant:`;
 
     if (!hfRes.ok) {
       const errText = await hfRes.text().catch(() => "");
-      return res.json({ success: false, error: "AI service unavailable" });
+      return res.json({ success: false, error: `AI error (${hfRes.status}): ${errText.slice(0,100)}` });
     }
 
     const hfData = await hfRes.json();
     let text = hfData[0]?.generated_text || "";
-    text = text.split("Assistant:").pop().trim();
+    text = text.replace(prompt, "").replace(/\n/g, " ").trim();
+    text = text.split(".")[0] + ".";
+    if (!text.includes("reasonable") && !text.includes("unreasonable")) {
+      text = `You spent a reasonable amount on ${category}.`;
+    }
 
-    res.json({ success: true, feedback: text || "Could not generate feedback." });
+    res.json({ success: true, feedback: text });
   } catch (err) {
     const msg = err.name === "AbortError"
       ? "AI request timed out"
