@@ -119,41 +119,49 @@ app.post(`${PREFIX}/ai-feedback`, async (req, res) => {
       return res.json({ success: false, error: "AI feedback is not configured" });
     }
 
-    const prompt = `<s>[INST] You are a financial advisor. Analyze this expense:
-Category: ${category}
-Amount: $${amount}
-
-Respond with ONE short sentence. Start with "You spent a" followed by "reasonable" or "unreasonable".
-If it is unreasonable, add " — that purchase was not needed." at the end.
-Keep it under 40 words. Do not add extra text. [/INST]`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
 
     const hfRes = await fetch(
-      "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
+      "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.3",
       {
         method: "POST",
         headers: {
           Authorization: `Bearer ${HF_API_KEY}`,
           "Content-Type": "application/json"
         },
+        signal: controller.signal,
         body: JSON.stringify({
-          inputs: prompt,
+          inputs: `<s>[INST] You are a financial advisor. Analyze this expense:
+Category: ${category}
+Amount: $${amount}
+
+Respond with ONE short sentence. Start with "You spent a" then "reasonable" or "unreasonable".
+If unreasonable add " — that purchase was not needed." Keep under 40 words. [/INST]`,
           parameters: { max_new_tokens: 80, temperature: 0.2 }
         })
       }
     );
 
+    clearTimeout(timeout);
+
     if (!hfRes.ok) {
-      return res.json({ success: false, error: "AI service unavailable" });
+      const errText = await hfRes.text().catch(() => "");
+      return res.json({ success: false, error: `AI service error (${hfRes.status})` });
     }
 
     const hfData = await hfRes.json();
     const text = hfData[0]?.generated_text || "";
+    const clean = text.split("[/INST]").pop().split("</s>")[0].trim();
 
-    const clean = text.split("[/INST]").pop().trim();
-
-    res.json({ success: true, feedback: clean });
+    res.json({ success: true, feedback: clean || "Could not generate feedback." });
   } catch (err) {
-    res.json({ success: false, error: err.message });
+    const msg = err.name === "AbortError"
+      ? "AI request timed out"
+      : err.message === "fetch failed"
+        ? "AI service unreachable"
+        : err.message;
+    res.json({ success: false, error: msg });
   }
 });
 
