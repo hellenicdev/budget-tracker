@@ -119,18 +119,17 @@ app.post(`${PREFIX}/ai-feedback`, async (req, res) => {
       return res.json({ success: false, error: "AI feedback is not configured" });
     }
 
-    const prompt = `You are a financial advisor. Analyze this expense:
-Category: ${category}
-Amount: $${amount}
-
+    const prompt = `<|user|>
+Analyze this expense: ${category} $${amount}.
 Respond with ONE short sentence. Start with "You spent a" then "reasonable" or "unreasonable".
-If unreasonable add " — that purchase was not needed." Keep under 40 words.`;
+If unreasonable add " — that purchase was not needed." Keep under 40 words.</s>
+<|assistant|>`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
 
     const hfRes = await fetch(
-      "https://router.huggingface.co/hf-inference/models/google/gemma-2-2b-it",
+      "https://router.huggingface.co/hf-inference/models/HuggingFaceH4/zephyr-7b-beta",
       {
         method: "POST",
         headers: {
@@ -153,10 +152,10 @@ If unreasonable add " — that purchase was not needed." Keep under 40 words.`;
     }
 
     const hfData = await hfRes.json();
-    const text = hfData[0]?.generated_text || "";
-    const clean = text.replace(prompt, "").trim();
+    let text = hfData[0]?.generated_text || "";
+    text = text.replace(prompt, "").replace(/<\/?s>/g, "").trim();
 
-    res.json({ success: true, feedback: clean || "Could not generate feedback." });
+    res.json({ success: true, feedback: text || "Could not generate feedback." });
   } catch (err) {
     const msg = err.name === "AbortError"
       ? "AI request timed out"
