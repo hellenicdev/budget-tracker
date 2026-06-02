@@ -119,17 +119,16 @@ app.post(`${PREFIX}/ai-feedback`, async (req, res) => {
       return res.json({ success: false, error: "AI feedback is not configured" });
     }
 
-    const prompt = `<|user|>
-Analyze this expense: ${category} $${amount}.
-Respond with ONE short sentence. Start with "You spent a" then "reasonable" or "unreasonable".
-If unreasonable add " — that purchase was not needed." Keep under 40 words.</s>
-<|assistant|>`;
+    const prompt = `User: Analyze this expense: ${category} $${amount}.
+Reply with ONE short sentence. Start with "You spent a" then "reasonable" or "unreasonable".
+If unreasonable add " — that purchase was not needed." Keep under 40 words.
+Assistant:`;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
 
     const hfRes = await fetch(
-      "https://router.huggingface.co/hf-inference/models/HuggingFaceH4/zephyr-7b-beta",
+      "https://router.huggingface.co/hf-inference/models/tiiuae/falcon-7b-instruct",
       {
         method: "POST",
         headers: {
@@ -148,12 +147,12 @@ If unreasonable add " — that purchase was not needed." Keep under 40 words.</s
 
     if (!hfRes.ok) {
       const errText = await hfRes.text().catch(() => "");
-      return res.json({ success: false, error: `AI service error (${hfRes.status}): ${errText}` });
+      return res.json({ success: false, error: "AI service unavailable" });
     }
 
     const hfData = await hfRes.json();
     let text = hfData[0]?.generated_text || "";
-    text = text.replace(prompt, "").replace(/<\/?s>/g, "").trim();
+    text = text.split("Assistant:").pop().trim();
 
     res.json({ success: true, feedback: text || "Could not generate feedback." });
   } catch (err) {
