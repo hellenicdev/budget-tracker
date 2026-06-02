@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const PREFIX = "/server";
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/budget-tracker";
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const HF_API_KEY = process.env.HF_API_KEY || "";
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || "";
 
 app.use(cors());
@@ -115,41 +115,47 @@ app.post(`${PREFIX}/ai-feedback`, async (req, res) => {
     if (amount === undefined || !category) {
       return res.json({ success: false, error: "Invalid data" });
     }
-    if (!GEMINI_API_KEY) {
-      return res.json({ success: false, error: "AI feedback not configured. Set GEMINI_API_KEY in env." });
+    if (!HF_API_KEY) {
+      return res.json({ success: false, error: "AI feedback not configured. Set HF_API_KEY in env." });
     }
 
-    const prompt = `You are a financial advisor. A user spent $${amount} on "${category}".
-Respond with ONE short sentence starting with "You spent a" followed by "reasonable" or "unreasonable".
-If unreasonable, end with " — that purchase was not needed." Keep under 40 words.`;
+    const prompt = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+
+You are a financial advisor.<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Analyze this expense: ${category} $${amount}. Respond with ONE short sentence starting with "You spent a" followed by "reasonable" or "unreasonable". If unreasonable, end with " — that purchase was not needed."<|eot_id|><|start_header_id|>assistant<|end_header_id|>`;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 25000);
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+    const hfRes = await fetch(
+      "https://router.huggingface.co/hf-inference/models/meta-llama/Llama-3.1-8B-Instruct",
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${HF_API_KEY}`,
+          "Content-Type": "application/json"
+        },
         signal: controller.signal,
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
+          inputs: prompt,
+          parameters: { max_new_tokens: 80, temperature: 0.2 }
         })
       }
     );
 
     clearTimeout(timeout);
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text().catch(() => "");
-      return res.json({ success: false, error: `AI error (${geminiRes.status})` });
+    if (!hfRes.ok) {
+      const errText = await hfRes.text().catch(() => "");
+      return res.json({ success: false, error: `AI error (${hfRes.status}): ${errText.slice(0,150)}` });
     }
 
-    const data = await geminiRes.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const clean = text.replace(/\n/g, " ").trim();
+    const hfData = await hfRes.json();
+    let text = hfData[0]?.generated_text || "";
+    text = text.split("<|start_header_id|>assistant<|end_header_id|>").pop().split("<|eot_id|>")[0].trim();
 
-    res.json({ success: true, feedback: clean || "Could not generate feedback." });
+    res.json({ success: true, feedback: text || "Could not generate feedback." });
   } catch (err) {
     const msg = err.name === "AbortError"
       ? "AI request timed out"
