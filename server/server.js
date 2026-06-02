@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const PREFIX = "/server";
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/budget-tracker";
-const HF_API_KEY = process.env.HF_API_KEY || "";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || "";
 
 app.use(cors());
@@ -115,48 +115,41 @@ app.post(`${PREFIX}/ai-feedback`, async (req, res) => {
     if (amount === undefined || !category) {
       return res.json({ success: false, error: "Invalid data" });
     }
-    if (!HF_API_KEY) {
-      return res.json({ success: false, error: "AI feedback is not configured" });
+    if (!GEMINI_API_KEY) {
+      return res.json({ success: false, error: "AI feedback not configured. Set GEMINI_API_KEY in env." });
     }
 
-    const prompt = `Expense: ${category} $${amount}
-Feedback: You spent a`;
+    const prompt = `You are a financial advisor. A user spent $${amount} on "${category}".
+Respond with ONE short sentence starting with "You spent a" followed by "reasonable" or "unreasonable".
+If unreasonable, end with " — that purchase was not needed." Keep under 40 words.`;
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(() => controller.abort(), 15000);
 
-    const hfRes = await fetch(
-      "https://router.huggingface.co/hf-inference/models/gpt2",
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${HF_API_KEY}`,
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          inputs: prompt,
-          parameters: { max_new_tokens: 40, temperature: 0.3 }
+          contents: [{ parts: [{ text: prompt }] }]
         })
       }
     );
 
     clearTimeout(timeout);
 
-    if (!hfRes.ok) {
-      const errText = await hfRes.text().catch(() => "");
-      return res.json({ success: false, error: `AI error (${hfRes.status}): ${errText.slice(0,100)}` });
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text().catch(() => "");
+      return res.json({ success: false, error: `AI error (${geminiRes.status})` });
     }
 
-    const hfData = await hfRes.json();
-    let text = hfData[0]?.generated_text || "";
-    text = text.replace(prompt, "").replace(/\n/g, " ").trim();
-    text = text.split(".")[0] + ".";
-    if (!text.includes("reasonable") && !text.includes("unreasonable")) {
-      text = `You spent a reasonable amount on ${category}.`;
-    }
+    const data = await geminiRes.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const clean = text.replace(/\n/g, " ").trim();
 
-    res.json({ success: true, feedback: text });
+    res.json({ success: true, feedback: clean || "Could not generate feedback." });
   } catch (err) {
     const msg = err.name === "AbortError"
       ? "AI request timed out"
