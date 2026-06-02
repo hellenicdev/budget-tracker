@@ -1,78 +1,76 @@
 <!DOCTYPE html>
-<head>
-<meta name="description" content="Track your income and expenses with ease. Great for personal finance planning (data saved in browser cookies)."/>
-<meta name="keywords" content="HellenicDev, programming, HTML, CSS, JS, open-source, projects, web-developement, hellenic, dev, developer, budget, tracker, finance, planning, money, Budget Tracker"/>
-<meta name="author" content="HellenicDev"/>
-<meta name="theme-color" content="#19336e"/>
-<meta property="og:title" content="Budget Tracker">
-<meta property="og:description" content="Track your income and expenses with ease. Great for personal finance planning (data saved in browser cookies).">
-<meta property="og:image" content="https://hellenicdev.github.io/budget-tracker/logo.webp">
-<meta property="og:url" content="https://hellenicdev.github.io/budget-tracker/">
-<meta property="og:type" content="website">
 <html lang="en">
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-9FWQFZME3Z');
-</script>
+<head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Budget Tracker</title>
+  <meta name="description" content="Track your income and expenses with ease."/>
+  <meta name="author" content="HellenicDev"/>
+  <meta name="theme-color" content="#19336e"/>
+  <meta property="og:title" content="Budget Tracker">
+  <meta property="og:description" content="Track your income and expenses with ease.">
+  <meta property="og:image" content="https://hellenicdev.github.io/budget-tracker/logo.webp">
+  <meta property="og:url" content="https://hellenicdev.github.io/budget-tracker/">
+  <meta property="og:type" content="website">
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-9FWQFZME3Z');
+  </script>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body style="display:flex; flex-direction:column; min-height:100vh; margin:0;">
+<body>
 
-<a href="/">
-  <img src="https://hellenicdev.github.io/logo.webp" alt="Logo" class="site-logo">
-</a>
+  <a href="/">
+    <img src="https://hellenicdev.github.io/logo.webp" alt="Logo" class="site-logo">
+  </a>
 
-<style>
-.site-logo {
-  position: fixed;   /* stays visible at all times */
-  top: 10px;
-  left: 10px;
-  width: 60px;       /* adjust size */
-  height: auto;
-  z-index: 9999;     /* stays above everything */
-}
-</style>
-  <!-- Authentication Card -->
   <div id="auth-card">
     <div class="card">
       <h2 id="form-title">Login</h2>
       <form id="auth-form">
         <input type="text" id="username" placeholder="Username" required />
         <input type="password" id="password" placeholder="Password" required />
+        <div id="turnstile-container"></div>
         <button type="submit">Login</button>
       </form>
       <div id="alert" class="alert hidden"></div>
     </div>
   </div>
 
-  <!-- Dashboard -->
   <div id="dashboard" class="hidden">
-    <h2>Welcome, <span id="user-display"></span></h2>
-    <button onclick="logout()">Logout</button>
-
-    <div>
-      <h3>Transactions</h3>
-      <input type="number" id="transaction-amount" placeholder="Amount" />
-      <input type="text" id="transaction-category" placeholder="Category" />
-      <button id="add-transaction">Add Transaction</button>
-      <div id="transaction-list"></div>
+    <div class="dashboard-header">
+      <h2>Welcome, <span id="user-display"></span></h2>
+      <button class="btn-logout" onclick="logout()">Logout</button>
     </div>
 
-    <!-- Budget Chart -->
-    <canvas id="budgetChart"></canvas>
+    <div class="dashboard-content">
+      <div class="panel panel-transactions">
+        <h3>Add Transaction</h3>
+        <div class="input-row">
+          <input type="number" id="transaction-amount" placeholder="Amount" />
+          <input type="text" id="transaction-category" placeholder="Category" />
+          <button id="add-transaction">Add</button>
+        </div>
+        <div id="transaction-list"></div>
+      </div>
+
+      <div class="panel panel-chart">
+        <h3>Spending Breakdown</h3>
+        <div class="chart-wrapper">
+          <canvas id="budgetChart"></canvas>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <footer>
+    &copy; 2025-2026 HellenicDev
+  </footer>
 
   <script src="app.js"></script>
 </body>
-<footer style="position: fixed; bottom: 0; left: 0; width: 100%; z-index: 9999; text-align: center; font-size: 14px; color: gray; background: white;
-">
-  © 2025-2026 HellenicDev — All projects and content belong to HellenicDev.
-</footer>
 </html>

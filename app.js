@@ -1,4 +1,5 @@
 const API_BASE = "https://budget-tracker-hk4o.onrender.com/server";
+const TURNSTILE_SITEKEY = "0x4AAAAAADdoCy_V3M2v9tST";
 
 document.addEventListener("DOMContentLoaded", () => {
   const authCard = document.getElementById("auth-card");
@@ -13,33 +14,48 @@ document.addEventListener("DOMContentLoaded", () => {
   const transactionList = document.getElementById("transaction-list");
   const addBtn = document.getElementById("add-transaction");
   const dashboard = document.getElementById("dashboard");
-  const logoutBtn = document.querySelector("#dashboard button");
+  const tcContainer = document.getElementById("turnstile-container");
 
   let currentUser = null;
   let isLogin = true;
   let chartInstance = null;
+  let turnstileWidgetId = null;
 
-  function showAlert(msg, type = "success") {
-    alertBox.textContent = msg;
-    alertBox.className = `alert ${type}`;
-    alertBox.classList.remove("hidden");
-    setTimeout(() => alertBox.classList.add("hidden"), 3000);
-  }
-
-  async function register(username, password) {
-    const res = await fetch(`${API_BASE}/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
+  function initTurnstile() {
+    if (typeof turnstile === "undefined") {
+      setTimeout(initTurnstile, 200);
+      return;
+    }
+    turnstileWidgetId = turnstile.render(tcContainer, {
+      sitekey: TURNSTILE_SITEKEY
     });
-    return res.json();
+  }
+  initTurnstile();
+
+  function getTurnstileToken() {
+    if (!turnstileWidgetId || typeof turnstile === "undefined") return "";
+    return turnstile.getResponse(turnstileWidgetId);
   }
 
-  async function login(username, password) {
-    const res = await fetch(`${API_BASE}/login`, {
+  function resetTurnstile() {
+    if (turnstileWidgetId && typeof turnstile !== "undefined") {
+      turnstile.reset(turnstileWidgetId);
+    }
+  }
+
+  function showAlert(msg, type) {
+    alertBox.textContent = msg;
+    alertBox.className = "alert";
+    if (type) alertBox.classList.add(type);
+    alertBox.classList.remove("hidden");
+    setTimeout(() => alertBox.classList.add("hidden"), 3500);
+  }
+
+  async function authRequest(endpoint, username, password, turnstileToken) {
+    const res = await fetch(`${API_BASE}/${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password, turnstileToken })
     });
     return res.json();
   }
@@ -67,7 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.logout = function () {
     dashboard.style.display = "none";
-    authCard.style.display = "block";
+    authCard.style.display = "";
     authForm.reset();
     currentUser = null;
     transactionList.innerHTML = "";
@@ -75,6 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
       chartInstance.destroy();
       chartInstance = null;
     }
+    resetTurnstile();
   };
 
   authForm.addEventListener("submit", async (e) => {
@@ -87,29 +104,35 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    const turnstileToken = getTurnstileToken();
+
     if (isLogin) {
       try {
-        const data = await login(username, password);
+        const data = await authRequest("login", username, password, turnstileToken);
         if (!data.success) {
           showAlert(data.error || "Invalid login", "error");
+          resetTurnstile();
           return;
         }
         showAlert("Login successful!");
         showDashboard(username);
       } catch {
-        showAlert("Cannot reach server. Make sure the server is running.", "error");
+        showAlert("Cannot reach server.", "error");
+        resetTurnstile();
       }
     } else {
       try {
-        const data = await register(username, password);
+        const data = await authRequest("register", username, password, turnstileToken);
         if (!data.success) {
           showAlert(data.error || "Registration failed", "error");
+          resetTurnstile();
           return;
         }
         showAlert("Registered! You can now log in.");
         toggleMode();
       } catch {
-        showAlert("Cannot reach server. Make sure the server is running.", "error");
+        showAlert("Cannot reach server.", "error");
+        resetTurnstile();
       }
     }
   });
@@ -126,6 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
     switchBtn.textContent = isLogin
       ? "Don't have an account? Sign up"
       : "Already have an account? Login";
+    resetTurnstile();
   }
 
   switchBtn.addEventListener("click", toggleMode);
@@ -172,13 +196,74 @@ document.addEventListener("DOMContentLoaded", () => {
       data.forEach(t => {
         const div = document.createElement("div");
         div.className = "transaction";
-        div.textContent = `${t.category}: $${parseFloat(t.amount).toFixed(2)}`;
+
+        const label = document.createElement("span");
+        label.textContent = `${t.category}: $${parseFloat(t.amount).toFixed(2)}`;
+
+        const actions = document.createElement("div");
+        actions.className = "transaction-actions";
+
+        const analyzeBtn = document.createElement("button");
+        analyzeBtn.className = "btn-analyze";
+        analyzeBtn.textContent = "Analyze";
+        analyzeBtn.dataset.amount = t.amount;
+        analyzeBtn.dataset.category = t.category;
+        analyzeBtn.addEventListener("click", onAnalyze);
+
+        actions.appendChild(analyzeBtn);
+        div.appendChild(label);
+        div.appendChild(actions);
         transactionList.appendChild(div);
       });
       renderChart(data);
     } catch {
       showAlert("Failed to load transactions.", "error");
     }
+  }
+
+  async function onAnalyze(e) {
+    const btn = e.currentTarget;
+    const amount = btn.dataset.amount;
+    const category = btn.dataset.category;
+    const txDiv = btn.closest(".transaction");
+
+    let feedbackEl = txDiv.nextElementSibling;
+    if (feedbackEl && feedbackEl.classList.contains("ai-feedback")) {
+      feedbackEl.remove();
+    }
+
+    feedbackEl = document.createElement("div");
+    feedbackEl.className = "ai-feedback loading";
+    feedbackEl.textContent = "Analyzing...";
+    txDiv.insertAdjacentElement("afterend", feedbackEl);
+    btn.disabled = true;
+
+    try {
+      const res = await fetch(`${API_BASE}/ai-feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount, category })
+      });
+      const data = await res.json();
+
+      if (!data.success) {
+        feedbackEl.textContent = data.error || "AI feedback unavailable";
+        feedbackEl.className = "ai-feedback";
+      } else {
+        feedbackEl.textContent = data.feedback;
+        feedbackEl.className = "ai-feedback";
+        if (data.feedback.toLowerCase().includes("unreasonable")) {
+          feedbackEl.classList.add("unreasonable");
+        } else if (data.feedback.toLowerCase().includes("reasonable")) {
+          feedbackEl.classList.add("reasonable");
+        }
+      }
+    } catch {
+      feedbackEl.textContent = "Failed to get AI feedback.";
+      feedbackEl.className = "ai-feedback";
+    }
+
+    btn.disabled = false;
   }
 
   function renderChart(transactions) {
@@ -205,10 +290,19 @@ document.addEventListener("DOMContentLoaded", () => {
         datasets: [{
           label: "Spending Breakdown",
           data: amounts.length ? amounts : [1],
-          backgroundColor: ["#FF5733", "#33FF57", "#3357FF", "#FF33A8", "#F3FF33"]
+          backgroundColor: ["#FF5733", "#33FF57", "#3357FF", "#FF33A8", "#F3FF33", "#FFC300", "#DAF7A6"]
         }]
       },
-      options: { responsive: true }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { padding: 16, boxWidth: 12 }
+          }
+        }
+      }
     });
   }
 });

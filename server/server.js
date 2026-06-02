@@ -7,6 +7,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const PREFIX = "/server";
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/budget-tracker";
+const HF_API_KEY = process.env.HF_API_KEY || "";
+const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || "";
 
 app.use(cors());
 app.use(express.json());
@@ -30,9 +32,27 @@ const transactionSchema = new mongoose.Schema({
 const User = mongoose.model("User", userSchema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
 
+async function verifyTurnstile(token) {
+  if (!TURNSTILE_SECRET) return true;
+  try {
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ secret: TURNSTILE_SECRET, response: token })
+    });
+    const data = await res.json();
+    return data.success;
+  } catch {
+    return false;
+  }
+}
+
 app.post(`${PREFIX}/register`, async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, turnstileToken } = req.body;
+    if (!(await verifyTurnstile(turnstileToken))) {
+      return res.json({ success: false, error: "Verification failed. Please try again." });
+    }
     if (!username || !password) {
       return res.json({ success: false, error: "Username and password required" });
     }
@@ -50,7 +70,10 @@ app.post(`${PREFIX}/register`, async (req, res) => {
 
 app.post(`${PREFIX}/login`, async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, turnstileToken } = req.body;
+    if (!(await verifyTurnstile(turnstileToken))) {
+      return res.json({ success: false, error: "Verification failed. Please try again." });
+    }
     const user = await User.findOne({ username });
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.json({ success: false, error: "Invalid login" });
@@ -81,8 +104,56 @@ app.get(`${PREFIX}/transactions/:username`, async (req, res) => {
       .select("amount category")
       .sort({ createdAt: -1 });
     res.json(transactions);
-  } catch (err) {
+  } catch {
     res.json([]);
+  }
+});
+
+app.post(`${PREFIX}/ai-feedback`, async (req, res) => {
+  try {
+    const { amount, category } = req.body;
+    if (amount === undefined || !category) {
+      return res.json({ success: false, error: "Invalid data" });
+    }
+    if (!HF_API_KEY) {
+      return res.json({ success: false, error: "AI feedback is not configured" });
+    }
+
+    const prompt = `<s>[INST] You are a financial advisor. Analyze this expense:
+Category: ${category}
+Amount: $${amount}
+
+Respond with ONE short sentence. Start with "You spent a" followed by "reasonable" or "unreasonable".
+If it is unreasonable, add " — that purchase was not needed." at the end.
+Keep it under 40 words. Do not add extra text. [/INST]`;
+
+    const hfRes = await fetch(
+      "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${HF_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          inputs: prompt,
+          parameters: { max_new_tokens: 80, temperature: 0.2 }
+        })
+      }
+    );
+
+    if (!hfRes.ok) {
+      return res.json({ success: false, error: "AI service unavailable" });
+    }
+
+    const hfData = await hfRes.json();
+    const text = hfData[0]?.generated_text || "";
+
+    const clean = text.split("[/INST]").pop().trim();
+
+    res.json({ success: true, feedback: clean });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
   }
 });
 
