@@ -65,22 +65,44 @@ document.addEventListener("DOMContentLoaded", () => {
     const res = await fetch(`${API_BASE}/${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ username, password, turnstileToken })
     });
     return res.json();
   }
 
-  async function addTransactionAPI(username, amount, category) {
-    await fetch(`${API_BASE}/add-transaction`, {
+  async function addTransactionAPI(amount, category) {
+    const res = await fetch(`${API_BASE}/add-transaction`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, amount, category })
+      credentials: "include",
+      body: JSON.stringify({ amount, category })
     });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || "Failed to save transaction.");
+    }
   }
 
-  async function loadTransactionsAPI(username) {
-    const res = await fetch(`${API_BASE}/transactions/${username}`);
-    return res.json();
+  async function loadTransactionsAPI() {
+    const res = await fetch(`${API_BASE}/transactions`, { credentials: "include" });
+    const data = await res.json();
+    if (!res.ok || !Array.isArray(data)) {
+      throw new Error("Failed to load transactions.");
+    }
+    return data;
+  }
+
+  async function restoreSession() {
+    try {
+      const res = await fetch(`${API_BASE}/me`, { credentials: "include" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && typeof data.username === "string") {
+        showDashboard(data.username);
+      }
+    } catch {
+    }
   }
 
   function showDashboard(username) {
@@ -91,7 +113,11 @@ document.addEventListener("DOMContentLoaded", () => {
     loadTransactions();
   }
 
-  window.logout = function () {
+  window.logout = async function () {
+    try {
+      await fetch(`${API_BASE}/logout`, { method: "POST", credentials: "include" });
+    } catch {
+    }
     dashboard.style.display = "none";
     authCard.style.display = "";
     authForm.reset();
@@ -124,8 +150,8 @@ document.addEventListener("DOMContentLoaded", () => {
           resetTurnstile();
           return;
         }
-        showAlert("Login successful!");
-        showDashboard(username);
+        showAlert("Login successful!", "success");
+        showDashboard(data.username || username);
       } catch {
         showAlert("Cannot reach server.", "error");
         resetTurnstile();
@@ -138,7 +164,7 @@ document.addEventListener("DOMContentLoaded", () => {
           resetTurnstile();
           return;
         }
-        showAlert("Registered! You can now log in.");
+        showAlert("Registered! You can now log in.", "success");
         toggleMode();
       } catch {
         showAlert("Cannot reach server.", "error");
@@ -163,6 +189,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   switchBtn.addEventListener("click", toggleMode);
+  restoreSession();
 
   const strengthContainer = document.createElement("div");
   strengthContainer.id = "strength";
@@ -189,19 +216,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      await addTransactionAPI(currentUser, amount, category);
-      showAlert("Transaction added!");
+      await addTransactionAPI(amount, category);
+      showAlert("Transaction added!", "success");
       amountInput.value = "";
       categoryInput.value = "";
       loadTransactions();
-    } catch {
-      showAlert("Failed to save transaction.", "error");
+    } catch (err) {
+      showAlert(err.message || "Failed to save transaction.", "error");
     }
   });
 
   async function loadTransactions() {
     try {
-      const data = await loadTransactionsAPI(currentUser);
+      const data = await loadTransactionsAPI();
       transactionList.innerHTML = "";
       data.forEach(t => {
         const div = document.createElement("div");
@@ -252,6 +279,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch(`${API_BASE}/ai-feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ amount, category })
       });
       const data = await res.json();
