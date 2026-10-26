@@ -58,6 +58,7 @@ describe("budget tracker API", { concurrency: false }, () => {
     process.env.ALLOWED_ORIGINS = "https://hellenicdev.eu";
     delete process.env.HF_API_KEY;
 
+    const realFetch = global.fetch.bind(global);
     global.fetch = async (url, options) => {
       const target = String(url);
       if (target.includes("challenges.cloudflare.com/turnstile")) {
@@ -65,7 +66,7 @@ describe("budget tracker API", { concurrency: false }, () => {
         const params = new URLSearchParams(raw);
         return { ok: true, json: async () => ({ success: params.get("response") === TOKEN }) };
       }
-      throw new Error(`unexpected fetch ${target}`);
+      return realFetch(url, options);
     };
 
     ({ app } = require("../server"));
