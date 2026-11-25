@@ -47,7 +47,7 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: "10kb" }));
 
 mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 10000 }).catch((err) => {
   logError("MongoDB connection error:", err);
@@ -197,6 +197,12 @@ app.post(`${PREFIX}/register`, authLimiter, requireDb, async (req, res) => {
     if (!username || typeof password !== "string" || password.length < 1 || password.length > 128) {
       return res.json({ success: false, error: "Username and password required" });
     }
+    if (!/^[A-Za-z0-9_.-]+$/.test(username)) {
+      return res.json({ success: false, error: "Username may only contain letters, numbers, dots, dashes and underscores" });
+    }
+    if (password.length < 6) {
+      return res.json({ success: false, error: "Password must be at least 6 characters" });
+    }
     const existing = await User.findOne({ username });
     if (existing) {
       return res.json({ success: false, error: "User exists" });
@@ -277,8 +283,10 @@ app.get(`${PREFIX}/transactions`, requireAuth, requireDb, async (req, res) => {
   try {
     const transactions = await Transaction
       .find({ username: req.user.username })
-      .select("amount category")
-      .sort({ createdAt: -1 });
+      .select("amount category createdAt")
+      .sort({ createdAt: -1 })
+      .limit(1000)
+      .lean();
     res.json(transactions);
   } catch (err) {
     logError("Load transactions failed:", err);
@@ -349,6 +357,14 @@ Analyze this expense: ${safeCategory} $${shown}. Respond with ONE short sentence
       error: timedOut ? "AI request timed out" : "AI feedback is unavailable"
     });
   }
+});
+
+app.get(`${PREFIX}/health`, (req, res) => {
+  res.json({ success: true, db: mongoose.connection.readyState === 1 ? "up" : "down" });
+});
+
+app.use((req, res) => {
+  res.status(404).json({ success: false, error: "Not found" });
 });
 
 app.use((err, req, res, next) => {

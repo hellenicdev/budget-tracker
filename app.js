@@ -230,6 +230,12 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const data = await loadTransactionsAPI();
       transactionList.innerHTML = "";
+      if (!Array.isArray(data) || data.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "empty-state";
+        empty.textContent = "No transactions yet. Add your first one above.";
+        transactionList.appendChild(empty);
+      }
       data.forEach(t => {
         const div = document.createElement("div");
         div.className = "transaction";

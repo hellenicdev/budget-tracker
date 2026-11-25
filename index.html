@@ -33,36 +33,36 @@
     <div class="card">
       <h2 id="form-title">Login</h2>
       <form id="auth-form">
-        <input type="text" id="username" placeholder="Username" required />
-        <input type="password" id="password" placeholder="Password" required />
+        <input type="text" id="username" placeholder="Username" aria-label="Username" autocomplete="username" maxlength="32" required />
+        <input type="password" id="password" placeholder="Password" aria-label="Password" autocomplete="current-password" maxlength="128" required />
         <div id="turnstile-container"></div>
         <button type="submit">Login</button>
       </form>
-      <div id="alert" class="alert hidden"></div>
+      <div id="alert" class="alert hidden" role="alert" aria-live="polite"></div>
     </div>
   </div>
 
   <div id="dashboard" class="hidden">
     <div class="dashboard-header">
       <h2>Welcome, <span id="user-display"></span></h2>
-      <button class="btn-logout" onclick="logout()">Logout</button>
+      <button type="button" class="btn-logout" onclick="logout()">Logout</button>
     </div>
 
     <div class="dashboard-content">
       <div class="panel panel-transactions">
         <h3>Add Transaction</h3>
         <div class="input-row">
-          <input type="number" id="transaction-amount" placeholder="Amount" />
-          <input type="text" id="transaction-category" placeholder="Category" />
-          <button id="add-transaction">Add</button>
+          <input type="number" id="transaction-amount" placeholder="Amount" aria-label="Amount" min="0.01" step="0.01" inputmode="decimal" />
+          <input type="text" id="transaction-category" placeholder="Category" aria-label="Category" maxlength="60" />
+          <button type="button" id="add-transaction">Add</button>
         </div>
-        <div id="transaction-list"></div>
+        <div id="transaction-list" aria-live="polite"></div>
       </div>
 
       <div class="panel panel-chart">
         <h3>Spending Breakdown</h3>
         <div class="chart-wrapper">
-          <canvas id="budgetChart"></canvas>
+          <canvas id="budgetChart" role="img" aria-label="Spending breakdown by category"></canvas>
         </div>
       </div>
     </div>
